@@ -6,11 +6,19 @@
 </head>
 <body>
 
-    <h2>Scan Page for Scams</h2>
+    <div class="container">
+        <h2>Scam Detector</h2>
 
-    <button id="scanBtn">Scan Now</button>
+        <div class="toggle-container">
+            <label class="switch">
+                <input type="checkbox" id="alwaysOnToggle">
+                <span class="slider"></span>
+            </label>
+            <span class="toggle-label">Always On</span>
+        </div>
 
-    <div id="result"></div>
+        <button id="scanBtn">Scan Now</button>
+    </div>
 
     <script src="popup.js"></script>
 </body>
