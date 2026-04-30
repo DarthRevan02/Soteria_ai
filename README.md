@@ -1,6 +1,6 @@
-# Soteria AI — Fake Internship / Job Scam Detector
+# Soteria AI — Fake Internship & Job Scam Detector
 
-> A browser extension + ML backend that detects fraudulent internship and job postings in real time.
+> A Chrome browser extension + ML backend that detects fraudulent internship and job postings in real time, powered by XGBoost and ArmorIQ policy enforcement.
 
 ---
 
@@ -10,18 +10,14 @@
 2. [Architecture](#architecture)
 3. [Directory Structure](#directory-structure)
 4. [Component Breakdown](#component-breakdown)
-   - [Browser Extension (Frontend)](#browser-extension-frontend)
-   - [ML Inference Engine](#ml-inference-engine-inferencepy)
-   - [FastAPI Backend](#fastapi-backend-mainpy)
-   - [ArmorIQ Integration](#armoriq-integration-armor_iq_integrationpy)
 5. [Data Flow — End to End](#data-flow--end-to-end)
-6. [Decision / Verdict System](#decision--verdict-system)
-7. [Keyword & Phrase Detection Categories](#keyword--phrase-detection-categories)
+6. [Verdict System](#verdict-system)
+7. [Keyword & Phrase Detection](#keyword--phrase-detection)
 8. [API Reference](#api-reference)
 9. [Setup & Installation](#setup--installation)
 10. [Environment Variables](#environment-variables)
 11. [Supported Platforms](#supported-platforms)
-12. [Future Work](#future-work)
+12. [Known Issues & TODOs](#known-issues--todos)
 
 ---
 
@@ -29,8 +25,10 @@
 
 **Soteria AI** is a two-part system:
 
-- A **Chrome browser extension** that monitors job/internship pages and overlays a warning badge.
-- A **Python FastAPI backend** that runs an ML model (XGBoost / scikit-learn) to score a posting's fraud risk, then routes the verdict through the **ArmorIQ SDK** for policy-enforced evaluation.
+- A **Chrome browser extension** that monitors job/internship pages and overlays a real-time warning badge.
+- A **Python FastAPI backend** that runs an ML model (XGBoost + TF-IDF hybrid) to score a posting's fraud risk, then routes the verdict through the **ArmorIQ SDK** for policy-enforced evaluation.
+
+The extension supports both **manual scanning** (click "Scan Now") and **Always On** mode, which automatically scans Internshala listing pages as you browse.
 
 The name references *Soteria* — the Greek goddess of safety and deliverance.
 
@@ -39,28 +37,29 @@ The name references *Soteria* — the Greek goddess of safety and deliverance.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   BROWSER (Chrome Extension)            │
-│                                                         │
-│  content.js          popup.html / popup.js              │
-│  ─ Scrapes page text ─ Trigger button                   │
-│  ─ Calls /analyze    ─ Injects content script           │
-│  ─ Shows badge       ─────────────────────────────────  │
-└──────────────────────────┬──────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                   BROWSER (Chrome Extension)                 │
+│                                                              │
+│  background.js        content.js          popup.html/.js     │
+│  ─ Listens for tab  ─ Scrapes page text  ─ Scan Now button  │
+│    URL changes      ─ Calls /analyze     ─ Always On toggle  │
+│  ─ Auto-triggers    ─ Shows badge                            │
+│    on Internshala                                            │
+└──────────────────────────┬───────────────────────────────────┘
                            │  POST /analyze
                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                  FastAPI Backend  (main.py)              │
-│                                                         │
-│  1. parse_internshala()   — Extract structured fields   │
-│  2. predict_extension_input_explainable()  — ML score   │
-│  3. evaluate_with_armoriq()  — Policy enforcement       │
-│                                                         │
-│        ┌──────────────┐    ┌────────────────────────┐   │
-│        │ inference.py │    │ armor_iq_integration.py│   │
-│        │ (ML Model)   │    │ (ArmorIQ SDK)          │   │
-│        └──────────────┘    └────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                  FastAPI Backend  (main.py)                  │
+│                                                              │
+│  1. parse_internshala()  — Extract structured fields         │
+│  2. predict_extension_input_explainable()  — ML score        │
+│  3. evaluate_with_armoriq()  — Policy enforcement            │
+│                                                              │
+│       ┌──────────────┐     ┌─────────────────────────────┐  │
+│       │ inference.py │     │ armor_iq_integration.py     │  │
+│       │ (ML Engine)  │     │ (ArmorIQ SDK Wrapper)       │  │
+│       └──────────────┘     └─────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -71,21 +70,22 @@ The name references *Soteria* — the Greek goddess of safety and deliverance.
 Soteria_ai/
 │
 ├── Frontend/
-│   ├── manifest.json      # Chrome Extension config (MV3)
-│   ├── content.js         # Injected into every page — scrapes & shows badge
-│   ├── popup.html         # Extension popup UI
-│   ├── popup.js           # Popup button logic
-│   └── style.css          # Popup styles
+│   ├── manifest.json       # Chrome Extension config (Manifest V3)
+│   ├── background.js       # Service worker — auto-scan on Internshala pages
+│   ├── content.js          # Injected into pages — scrapes text & shows badge
+│   ├── popup.html          # Extension popup UI
+│   ├── popup.js            # Popup logic — Scan Now + Always On toggle
+│   └── style.css           # Popup styles (dark theme)
 │
-├── model/                 # (not in repo — generated by training)
-│   ├── model.pkl          # Trained XGBoost / sklearn model
-│   ├── vectorizer.pkl     # TF-IDF vectorizer
+├── model/                  # Generated by training — not in repo
+│   ├── model.pkl           # Trained XGBoost / sklearn classifier
+│   ├── vectorizer.pkl      # TF-IDF vectorizer
 │   └── suspicious_phrases.pkl
 │
-├── inference.py           # ML prediction logic
-├── main.py                # FastAPI server + Internshala parser
-├── armor_iq_integration.py# ArmorIQ SDK wrapper
-├── requirements.txt       # Python dependencies
+├── inference.py            # ML prediction + explainability logic
+├── main.py                 # FastAPI server + Internshala page parser
+├── armor_iq_integration.py # ArmorIQ SDK wrapper + verdict mapping
+├── requirements.txt        # Python dependencies
 └── README.md
 ```
 
@@ -96,49 +96,77 @@ Soteria_ai/
 ### Browser Extension (Frontend)
 
 #### `manifest.json`
-Declares the extension using **Manifest V3** (the current Chrome standard).
+Declares the extension using **Manifest V3**.
 
 | Field | Value | Purpose |
 |---|---|---|
-| `permissions` | `activeTab`, `scripting` | Read current tab & inject scripts |
+| `permissions` | `storage`, `activeTab`, `scripting` | Storage for Always On toggle; read tab & inject scripts |
 | `host_permissions` | `<all_urls>` | Run on any website |
-| `action.default_popup` | `popup.html` | Opens when the extension icon is clicked |
-| `content_scripts` | `content.js` on `<all_urls>` | Auto-injects on every page load |
+| `background.service_worker` | `background.js` | Auto-scan listener |
+| `action.default_popup` | `popup.html` | Opens on extension icon click |
+| `content_scripts` | `content.js` on `<all_urls>` | Injected on every page load |
+
+---
+
+#### `background.js`
+A **service worker** that listens for tab URL changes.
+
+- Fires when a tab finishes loading (`changeInfo.status === "complete"`)
+- Checks `chrome.storage.local` for the `alwaysOn` flag
+- If enabled and the URL matches `internshala.com/internship/detail/*`, sends a `{ action: "scan" }` message to `content.js`
+
+This is what powers **Always On** mode — zero user interaction needed.
+
+---
 
 #### `content.js`
-The core client-side script injected into the browser tab.
+The core client-side script injected into every browser tab.
 
 **`getPageData()`**
-- Grabs `document.body.innerText` (the full visible text of the page)
-- Collects up to 20 `http` links from the page
-- Reads `window.location.hostname` for the domain
+- Reads `document.body.innerText` (full visible page text)
+- Reads `window.location.hostname` (domain) and `window.location.href` (full URL)
+- Returns `{ raw_text, domain, url }` — exactly what the backend expects
 
 **`analyzePage()`**
-- Calls `getPageData()` and sends a `POST` request to the backend `/analyze` endpoint
-- On receiving the result, calls `showWarning(result)`
-- Currently has the backend call **commented out** and uses a hardcoded mock result for testing
+- Calls `getPageData()` and POSTs to `http://<your-server>:8000/analyze`
+- On response, extracts `result.armor_verdict` and passes it to `showWarning()`
+- Wrapped in try/catch with console error logging
 
 **`showWarning(result)`**
 - Creates a fixed-position overlay badge in the top-right corner
-- Color-coded by decision:
-  - 🔴 `BLOCK` — red background, "Scam Detected"
-  - 🟠 `WARN` — orange background, "Suspicious"
-  - 🟢 `OKAY` — green background, "Safe"
-- Animates in with a slide + fade transition
-- Includes a close `✖` button
+- Reads `result.verdict` and `result.score_pct` from the armor verdict
+- Color-coded:
+  - 🔴 `BLOCK` / `HIGH_BLOCK` → red, "❌ Scam Detected"
+  - 🟠 `WARN` → orange, "⚠️ Suspicious"
+  - 🟢 `ALLOW` → green, "✅ Safe"
+- Shows score percentage + list of reasons
+- Slides in with a CSS transition animation
+- Has a `✖` close button
 
 **`highlightKeywords(keywords)`**
-- Scans `document.body.innerHTML` and wraps matched keywords in a red highlight span
-- Useful for visual debugging (currently not called automatically)
+- Wraps matched keywords in a red highlight `<span>` across the page body
+- Defined but not called automatically — available for debugging
+
+**Message Listener**
+- Listens for `{ action: "scan" }` from `background.js` (Always On mode) and triggers `analyzePage()`
+
+---
 
 #### `popup.html` + `popup.js`
-A simple popup with a **"Scan Now"** button. When clicked:
-1. Queries the active tab
-2. Uses `chrome.scripting.executeScript` to call `analyzePage()` in the tab's context
-3. Closes the popup immediately
+A 250px popup with two controls:
+
+**Always On toggle** — persisted via `chrome.storage.local`. When enabled, background.js auto-scans every Internshala listing page you visit.
+
+**Scan Now button** — sends `{ action: "scan" }` to the active tab's `content.js`, then closes the popup.
+
+---
 
 #### `style.css`
-Basic styling for the 200px-wide popup panel.
+Dark navy gradient theme (`#0f172a` → `#1e293b`) with:
+- Sky blue title (`#38bdf8`)
+- Gradient scan button (blue → indigo) with hover scale effect
+- Animated green toggle switch
+- Glassmorphism-style container
 
 ---
 
@@ -148,192 +176,202 @@ Loads three pre-trained artifacts from `model/`:
 
 | Artifact | Purpose |
 |---|---|
-| `model.pkl` | Classifier (outputs fraud probability) |
-| `vectorizer.pkl` | TF-IDF vectorizer for text → feature vector |
+| `model.pkl` | Classifier — outputs fraud probability via `predict_proba()` |
+| `vectorizer.pkl` | TF-IDF vectorizer — converts text to feature vector |
 | `suspicious_phrases.pkl` | Curated list of known scam phrases |
 
 #### Threshold System
 
-| Threshold | Value | Meaning |
+| Constant | Value | Meaning |
 |---|---|---|
-| `FINAL_ALERT_THRESHOLD` | 0.75 | Predicted label = fake |
+| `FINAL_ALERT_THRESHOLD` | 0.75 | Predicted label flips to "fake" |
 | `HIGH_RISK_THRESHOLD` | 0.55 | Risk level = "High Risk" |
 | `MEDIUM_RISK_THRESHOLD` | 0.30 | Risk level = "Medium Risk" |
+
+#### Keyword Detection Lists
+
+| Category | Example phrases |
+|---|---|
+| Payment | `"registration fee"`, `"pay to apply"`, `"security deposit"`, `"processing fee"` |
+| Urgency | `"immediate joining"`, `"urgent hiring"`, `"limited seats"`, `"apply fast"` |
+| Unofficial contact | `"whatsapp only"`, `"telegram"`, `"dm to apply"`, `"call now"` |
+| False promises | `"easy money"`, `"guaranteed stipend"`, `"earn from home"`, `"daily payout"` |
 
 #### Key Functions
 
 **`build_model_text(...)`**
-Concatenates all structured job fields (title, description, requirements, etc.) into a single tagged string for the vectorizer. Each field is prefixed with its name (e.g., `TITLE Software Intern DESCRIPTION ...`) to preserve semantic context.
+Concatenates all structured job fields into a single tagged string: `"TITLE ... DESCRIPTION ... REQUIREMENTS ..."`. Field prefixes preserve semantic context for the TF-IDF vectorizer.
 
 **`clean_extension_text(text)`**
-Normalizes input: lowercases, strips HTML tags, removes URLs, removes punctuation and long digit sequences, collapses whitespace.
-
-**`predict_extension_input(...)`**
-Core prediction function:
-1. Builds and cleans the combined text
-2. Counts suspicious phrases
-3. Vectorizes text with TF-IDF
-4. Appends the phrase count as an extra feature (`hstack`)
-5. Returns fraud probability from `predict_proba()`
+Normalizes input: lowercases → strips HTML → removes URLs → removes punctuation → collapses whitespace.
 
 **`predict_extension_input_explainable(...)`**
-Same as above, but also returns:
-- `matched_reasons` — which specific phrases/keywords were found
-- `top_fraud_terms` — top 5 TF-IDF features with highest model weight contribution
+Full prediction pipeline:
+1. Builds tagged combined text from all job fields
+2. Cleans text
+3. Counts suspicious phrases
+4. TF-IDF vectorizes text
+5. Appends phrase count as an extra feature (`hstack`)
+6. Runs `model.predict_proba()` → fraud probability
+7. Returns score + `matched_reasons` + `top_fraud_terms`
 
 **`get_top_fraud_terms(cleaned_text, top_n=5)`**
-Computes per-term contribution by multiplying the TF-IDF vector element-wise with the model's learned coefficients. Returns the top `n` terms sorted by contribution score — this is a lightweight local explainability mechanism (similar in spirit to LIME/SHAP but much faster).
+Lightweight explainability: multiplies the TF-IDF vector element-wise with the model's learned coefficients to find which terms contributed most to the fraud score. Returns top `n` terms by contribution — no SHAP/LIME overhead needed.
 
 **`extract_matched_reasons(text)`**
-Scans the cleaned text against five keyword lists and returns each category's matched items.
+Scans cleaned text against all five keyword lists and returns each category's matched items as a dict.
 
 ---
 
 ### FastAPI Backend (`main.py`)
 
-Serves a single POST endpoint `/analyze`.
+Single POST endpoint `/analyze`. CORS enabled for all origins so the browser extension can call a local server freely.
 
 #### `parse_internshala(raw_text, url)`
-A custom parser specifically for **Internshala** pages. Uses regex and string splitting to extract:
+Custom parser for Internshala listing pages. Uses regex and string splitting to extract structured fields from raw scraped text:
 
 | Field | Extraction method |
 |---|---|
-| `title` | Regex: text before " - Internship" |
-| `company_profile` | Splits on "About {company_name}" section |
-| `location` | Checks for "Work from home" string |
+| `title` | Regex: text before `" - Internship"` |
+| `company_profile` | Splits on `"About {company_name}"` section |
+| `location` | Checks for `"Work from home"` string → `"Remote"` |
 | `salary_range` | Regex: `₹ digits /month` |
-| `description` | Section between "About the work..." and "Skill(s) required" |
-| `requirements` | Section after "Other requirements" |
-| `benefits` | Section after "Perks" |
+| `description` | Section between `"About the work from home job/internship"` and `"Skill(s) required"` |
+| `requirements` | Section after `"Other requirements"` |
+| `benefits` | Section after `"Perks"` |
 
-#### `/analyze` Endpoint — Step by Step
+#### `/analyze` Endpoint Flow
 
 ```
-POST /analyze
-Body: { raw_text: string, domain: string, url: string }
-
-1. Validates domain is "internshala"
-2. parse_internshala()  →  structured dict
-3. predict_extension_input_explainable()  →  ml_result
-4. evaluate_with_armoriq()  →  ArmorVerdict
-5. Returns combined JSON response
+POST /analyze  { raw_text, domain, url }
+    │
+    ├─ Validate: domain must contain "internshala"
+    ├─ parse_internshala()  →  structured dict
+    ├─ predict_extension_input_explainable()  →  ml_result
+    ├─ evaluate_with_armoriq()  →  ArmorVerdict
+    └─ Return { structured_data, ml_analysis, armor_verdict }
 ```
-
-CORS is enabled for all origins (`*`) so the browser extension can freely call the local server.
 
 ---
 
 ### ArmorIQ Integration (`armor_iq_integration.py`)
 
-Wraps the **ArmorIQ SDK** — a policy enforcement layer that sits between the ML output and the final verdict. Think of it as a compliance firewall for AI agent actions.
+Wraps the **ArmorIQ SDK** — a policy enforcement layer between the ML output and the final verdict. Ensures the AI agent only performs read-only analysis and respects defined rate limits.
 
-#### `ArmorVerdict` dataclass
-The unified output object:
+#### `ArmorVerdict` Dataclass
 
 | Field | Type | Description |
 |---|---|---|
 | `verdict` | str | `ALLOW` / `WARN` / `BLOCK` / `HIGH_BLOCK` |
 | `score` | float | Raw ML probability (0.0–1.0) |
-| `score_pct` | int | Score as integer percentage |
-| `risk_level` | str | Human-readable risk label |
-| `reasons` | list[str] | Human-readable explanations |
+| `score_pct` | int | Score as integer percentage (shown in badge) |
+| `risk_level` | str | `"Low Risk"` / `"Medium Risk"` / `"High Risk"` |
+| `reasons` | list[str] | Human-readable explanations shown in badge |
 | `keywords` | list[str] | Matched suspicious keywords |
 | `policy_triggers` | list[str] | ArmorIQ policy categories triggered |
-| `armoriq_verified` | bool | Whether ArmorIQ call succeeded |
+| `armoriq_verified` | bool | `True` if ArmorIQ SDK call succeeded |
 
 #### `SCAM_DETECTOR_POLICY`
-Defines what the AI agent is allowed to do:
-- **Allow:** `analyze_posting` only
-- **Deny:** any `modify_*` or `delete_*` actions (read-only system)
-- **Rate limit:** 200 requests/hour
+```python
+{
+    "allow": ["scam-detector-mcp/analyze_posting"],
+    "deny":  ["scam-detector-mcp/modify_*", "scam-detector-mcp/delete_*"],
+    "allowed_tools": ["analyze_posting"],
+    "rate_limit": 200   # requests/hour
+}
+```
 
 #### `_map_to_verdict(ml_result, armoriq_data)`
-Maps the ML score to a 4-level verdict:
 
 | Condition | Verdict |
 |---|---|
-| score ≥ 0.85 OR hard-block phrase found | `HIGH_BLOCK` |
+| score ≥ 0.85 OR hard-block phrase matched | `HIGH_BLOCK` |
 | score ≥ 0.75 | `BLOCK` |
 | score ≥ 0.30 OR suspicious phrase count ≥ 3 | `WARN` |
 | All else | `ALLOW` |
 
 Hard-block phrases: `"pay to apply"`, `"upfront fee"`, `"money transfer"`, `"payment required"`
 
-#### `evaluate_with_armoriq(ml_result, structured_job)`
-The 4-step ArmorIQ flow:
+#### 4-Step ArmorIQ Flow
 
-1. **`capture_plan()`** — Declare intent: "I will analyze this posting"
-2. **`get_intent_token()`** — Get a short-lived cryptographic token with the scam-detector policy attached
-3. **`invoke()`** — Send the analysis action through the ArmorIQ proxy (policy is enforced here)
-4. **Map result** — Convert the response to an `ArmorVerdict`
+1. **`capture_plan()`** — Declares intent to ArmorIQ: "I will analyze this posting"
+2. **`get_intent_token()`** — Gets a 60-second cryptographic token with the scam-detector policy attached
+3. **`invoke()`** — Sends the action through the ArmorIQ proxy (policy enforced here)
+4. **`_map_to_verdict()`** — Maps the response to a 4-level verdict
 
-If ArmorIQ is unreachable, the system **fails open** (returns a `WARN` with local verdict) rather than blocking all analysis.
+**Fail-open behavior:** If ArmorIQ is unreachable, the system falls back to local verdict mapping (never blocks all analysis). The `armoriq_verified` flag in the response indicates whether the SDK call succeeded.
 
 ---
 
 ## Data Flow — End to End
 
 ```
-User visits Internshala posting
+User visits Internshala internship page
          │
-         ▼
-content.js scrapes page text + domain + URL
-         │
-         ▼
-POST /analyze  →  FastAPI
-         │
-         ├─ parse_internshala()
-         │    └─ Structured fields: title, description, salary, etc.
-         │
-         ├─ predict_extension_input_explainable()
-         │    ├─ build_model_text()  →  tagged string
-         │    ├─ clean_extension_text()  →  normalized text
-         │    ├─ TF-IDF vectorize  +  suspicious_phrase_count
-         │    └─ model.predict_proba()  →  fake_risk_score (0.0–1.0)
-         │
-         ├─ evaluate_with_armoriq()
-         │    ├─ capture_plan()
-         │    ├─ get_intent_token()
-         │    ├─ invoke() through ArmorIQ proxy
-         │    └─ _map_to_verdict()  →  ALLOW / WARN / BLOCK / HIGH_BLOCK
-         │
-         └─ JSON response → content.js
+         ├─ Always On? → background.js detects URL match → sends "scan" message
+         └─ Manual?    → user clicks "Scan Now" in popup
                   │
                   ▼
-         showWarning(result)  →  Badge overlay in browser
+         content.js: getPageData()
+         { raw_text, domain, url }
+                  │
+                  ▼
+         POST http://<server>:8000/analyze
+                  │
+                  ├─ parse_internshala()
+                  │    └─ title, description, salary, company, etc.
+                  │
+                  ├─ predict_extension_input_explainable()
+                  │    ├─ build_model_text()  →  tagged string
+                  │    ├─ clean_extension_text()  →  normalized
+                  │    ├─ TF-IDF + suspicious_phrase_count (hstack)
+                  │    └─ model.predict_proba()  →  fake_risk_score
+                  │
+                  ├─ evaluate_with_armoriq()
+                  │    ├─ capture_plan()
+                  │    ├─ get_intent_token()
+                  │    ├─ invoke() through ArmorIQ proxy
+                  │    └─ _map_to_verdict()  →  ALLOW/WARN/BLOCK/HIGH_BLOCK
+                  │
+                  └─ JSON response → content.js
+                           │
+                           ▼
+                  showWarning(result.armor_verdict)
+                  → Animated badge overlay in browser
 ```
 
 ---
 
-## Decision / Verdict System
+## Verdict System
 
-The system uses two parallel scoring systems that are then merged:
+### Score → Verdict Mapping
 
-### ML Score (inference.py)
-A continuous probability from the trained model.
-
-### Rule-Based Verdict (armor_iq_integration.py)
-Maps the score + keyword matches to a discrete level.
-
-### Frontend Display Mapping
-
-| Backend verdict | Badge color | Message |
+| ML Score | Verdict | Badge |
 |---|---|---|
-| `BLOCK` / `HIGH_BLOCK` | 🔴 Red | ❌ Scam Detected |
-| `WARN` | 🟠 Orange | ⚠️ Suspicious |
-| `ALLOW` / `OKAY` | 🟢 Green | ✅ Safe |
+| ≥ 85% OR hard-block phrase | `HIGH_BLOCK` | 🔴 ❌ Scam Detected |
+| ≥ 75% | `BLOCK` | 🔴 ❌ Scam Detected |
+| ≥ 30% OR ≥ 3 suspicious phrases | `WARN` | 🟠 ⚠️ Suspicious |
+| < 30% | `ALLOW` | 🟢 ✅ Safe |
+
+### Risk Level (shown in ml_analysis)
+
+| Score | Risk Level |
+|---|---|
+| ≥ 55% | High Risk |
+| ≥ 30% | Medium Risk |
+| < 30% | Low Risk |
 
 ---
 
-## Keyword & Phrase Detection Categories
+## Keyword & Phrase Detection
 
-| Category | Examples |
+| Category | Key phrases detected |
 |---|---|
-| Payment keywords | "registration fee", "pay to apply", "security deposit" |
-| Urgency keywords | "immediate joining", "urgent hiring", "limited seats" |
-| Unofficial contact | "whatsapp only", "telegram", "dm to apply" |
-| False promises | "easy money", "guaranteed stipend", "earn from home" |
-| Suspicious phrases | (loaded from `suspicious_phrases.pkl` — trained list) |
+| Payment | `"registration fee"`, `"pay to apply"`, `"application fee"`, `"security deposit"`, `"training fee"`, `"processing fee"` |
+| Urgency | `"immediate joining"`, `"urgent hiring"`, `"limited seats"`, `"apply fast"`, `"instant joining"` |
+| Unofficial contact | `"whatsapp only"`, `"message on whatsapp"`, `"dm to apply"`, `"telegram"`, `"call now"` |
+| False promises | `"no experience needed"`, `"easy money"`, `"guaranteed stipend"`, `"earn from home"`, `"daily payout"`, `"refer and earn"` |
+| Suspicious phrases | Loaded from `suspicious_phrases.pkl` (trained curated list) |
 
 ---
 
@@ -342,7 +380,6 @@ Maps the score + keyword matches to a discrete level.
 ### `GET /`
 Health check.
 
-**Response:**
 ```json
 { "message": "Fake Internship Detector v2 — ArmorIQ + ArmorClaw enabled 🛡️" }
 ```
@@ -352,9 +389,9 @@ Health check.
 **Request body:**
 ```json
 {
-  "raw_text": "<full page text scraped from browser>",
+  "raw_text": "<full page text scraped by content.js>",
   "domain": "internshala.com",
-  "url": "https://internshala.com/internship/..."
+  "url": "https://internshala.com/internship/detail/..."
 }
 ```
 
@@ -392,6 +429,11 @@ Health check.
 }
 ```
 
+**Error (non-Internshala domain):**
+```json
+{ "error": "Only Internshala supported for now" }
+```
+
 ---
 
 ## Setup & Installation
@@ -405,11 +447,11 @@ cd Soteria_ai
 
 # 2. Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate       # Windows: venv\Scripts\activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
-pip install fastapi uvicorn armoriq-sdk  # add to requirements as needed
+pip install fastapi uvicorn armoriq-sdk
 
 # 4. Add your trained model files
 mkdir model
@@ -418,19 +460,19 @@ mkdir model
 # 5. Set environment variables (see below)
 
 # 6. Start the server
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Chrome Extension
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable **Developer Mode** (top right toggle)
+1. Open Chrome → go to `chrome://extensions/`
+2. Enable **Developer Mode** (top-right toggle)
 3. Click **"Load unpacked"**
 4. Select the `Frontend/` directory
 
-The extension icon will appear in your toolbar.
+The Soteria AI icon will appear in your Chrome toolbar.
 
-> **To connect to the live backend:** In `content.js`, uncomment the `fetch("http://localhost:8000/analyze", ...)` block and remove the hardcoded mock result.
+> **Backend URL:** Update the `fetch(...)` URL in `content.js` to point to your server's IP/hostname. Currently set to `http://10.245.164.208:8000/analyze`.
 
 ---
 
@@ -442,28 +484,36 @@ The extension icon will appear in your toolbar.
 | `ARMORIQ_USER_ID` | Unique user ID string (e.g. `"scam-detector-user"`) |
 | `ARMORIQ_AGENT_ID` | Unique agent ID string (e.g. `"scam-detector-agent-v1"`) |
 
+> Currently the API key is hardcoded as `"."` in `armor_iq_integration.py`. Replace with `os.environ.get("ARMORIQ_API_KEY")` before deploying.
+
 ---
 
 ## Supported Platforms
 
 | Platform | Status |
 |---|---|
-| Internshala | ✅ Supported |
+| Internshala | ✅ Full support (auto-detect + manual scan) |
 | LinkedIn | 🔜 Planned |
 | Naukri | 🔜 Planned |
+| WhatsApp Web | 🔜 Planned |
 | Indeed | 🔜 Planned |
 
-The backend currently returns an error for non-Internshala domains. New parsers can be added in `main.py` following the `parse_internshala()` pattern.
+New platforms can be added in `main.py` by following the `parse_internshala()` pattern and adding a domain check in the `/analyze` route.
 
 ---
 
-## Known Issues / TODOs
+## Known Issues & TODOs
 
-- Backend URL in `content.js` is currently commented out — uses a hardcoded mock result
-- `armor_iq_integration.py` has an indentation bug in `ArmorVerdict.to_dict()` (the `return` statement is not indented inside the method)
-- `requirements.txt` is missing `fastapi`, `uvicorn`, and `armoriq-sdk`
-- `highlightKeywords()` is defined but never called automatically
-- Only Internshala is supported as a source platform
+- `armor_iq_integration.py` has an **indentation bug** in `ArmorVerdict.to_dict()` — the `return` statement is not indented inside the method body. Fix:
+  ```python
+  def to_dict(self) -> dict:
+      return { ... }   # indent this block
+  ```
+- `requirements.txt` is missing `fastapi`, `uvicorn`, and `armoriq-sdk` — add these before sharing
+- `highlightKeywords()` in `content.js` is defined but never called automatically
+- ArmorIQ API key is hardcoded as `"."` — should be read from environment variable
+- Backend URL in `content.js` is a hardcoded LAN IP — should be configurable
+- Only Internshala internship detail pages are auto-scanned by `background.js`; LinkedIn and others require manual scan
 
 ---
 
