@@ -114,7 +114,7 @@ def _map_to_verdict(ml_result: dict, armoriq_data: dict) -> str:
         return "HIGH_BLOCK"
     elif score >= 0.75:
         return "BLOCK"
-    elif score >= 0.40 or phrase_count >= 3:
+    elif score >= 0.30 or phrase_count >= 3:
         return "WARN"
     else:
         return "ALLOW"
