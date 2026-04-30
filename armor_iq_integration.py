@@ -60,16 +60,12 @@ class ArmorVerdict:
     armoriq_verified: bool = False   # True if ArmorIQ call succeeded
 
     def to_dict(self) -> dict:
-        return {
-            "verdict": self.verdict,
-            "score": self.score,
-            "score_pct": self.score_pct,
-            "risk_level": self.risk_level,
-            "reasons": self.reasons,
-            "keywords": self.keywords,
-            "policy_triggers": self.policy_triggers,
-            "armoriq_verified": self.armoriq_verified,
-        }
+    return {
+        "verdict":         self.verdict,
+        "score":           self.score_pct,
+        "reasons":         self.reasons,
+        "policy_triggers": self.policy_triggers,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
