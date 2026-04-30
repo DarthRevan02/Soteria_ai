@@ -37,9 +37,9 @@ def get_client() -> ArmorIQClient:
     global _client
     if _client is None:
         _client = ArmorIQClient(
-            api_key=os.getenv("ARMORIQ_API_KEY"),
-            user_id=os.getenv("ARMORIQ_USER_ID", "scam-detector-user"),
-            agent_id=os.getenv("ARMORIQ_AGENT_ID", "scam-detector-agent-v1"),
+            api_key="ak_live_dcf77e9a3cb29ec878437031a154a7ac6babdd336095304cf5a43cb6b3dcb214",
+            user_id="scam-detector-user",
+            agent_id="scam-detector-agent-v1",
         )
     return _client
 
